@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'">
+  <title>私人文档</title>
+  <style>
+    :root{color-scheme:light;--ink:#24302d;--green:#284b43;--line:#d8ddd9;--paper:#fffdf9}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f2f4f2;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+    main{width:min(440px,100%);padding:30px 24px;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 40px #18362e18}
+    h1{margin:0 0 8px;font-size:24px;color:var(--green)}p{margin:0 0 20px;color:#66716d;line-height:1.7}
+    label{display:block;margin-bottom:8px;font-weight:650}input,button{width:100%;height:48px;border-radius:10px;font:inherit}
+    input{padding:0 13px;border:1px solid #bdc8c3;background:#fff}button{margin-top:12px;border:0;background:var(--green);color:#fff;font-weight:700}
+    button:disabled{opacity:.65}.error{min-height:24px;margin:10px 0 0;color:#b33c2f;font-size:14px}.note{margin-top:18px;font-size:12px;color:#8a918e}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>私人文档</h1>
+    <p>正文已加密。请输入访问密码后在当前设备中解密。</p>
+    <form id="unlock">
+      <label for="password">访问密码</label>
+      <input id="password" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required autofocus>
+      <button id="submit" type="submit">解锁查看</button>
+      <div class="error" id="error" role="alert"></div>
+    </form>
+    <div class="note">密码不会上传；解密只在浏览器本地完成。</div>
+  </main>
+  <script src="payload.js"></script>
+  <script>
+    const decodeBase64 = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
+    const form = document.querySelector("#unlock");
+    const passwordInput = document.querySelector("#password");
+    const submit = document.querySelector("#submit");
+    const error = document.querySelector("#error");
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      error.textContent = "";
+      submit.disabled = true;
+      submit.textContent = "正在解密…";
+      try {
+        const payload = window.ENCRYPTED_SITE;
+        const passwordKey = await crypto.subtle.importKey(
+          "raw",
+          new TextEncoder().encode(passwordInput.value),
+          "PBKDF2",
+          false,
+          ["deriveKey"]
+        );
+        const key = await crypto.subtle.deriveKey(
+          {name:"PBKDF2",salt:decodeBase64(payload.salt),iterations:payload.iterations,hash:"SHA-256"},
+          passwordKey,
+          {name:"AES-GCM",length:256},
+          false,
+          ["decrypt"]
+        );
+        const plaintext = await crypto.subtle.decrypt(
+          {name:"AES-GCM",iv:decodeBase64(payload.iv),tagLength:128},
+          key,
+          decodeBase64(payload.ciphertext)
+        );
+        const html = new TextDecoder().decode(plaintext);
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (_) {
+        error.textContent = "密码不正确，请重新输入。";
+        passwordInput.select();
+        submit.disabled = false;
+        submit.textContent = "解锁查看";
+      }
+    });
+  </script>
+</body>
+</html>
